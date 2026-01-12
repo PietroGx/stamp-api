@@ -1,8 +1,8 @@
 fastapi
 uvicorn
 python-multipart
-requests
 pdf2image
 reportlab
 opencv-python-headless
 numpy
+Pillow
