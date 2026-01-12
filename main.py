@@ -18,7 +18,7 @@ class PdfRequest(BaseModel):
 
 @app.post("/process-stamps")
 def process_stamps(request: PdfRequest):
-    # Download PDF
+    # 1. Download
     try:
         response = requests.get(request.pdfstampurl)
         if response.status_code != 200:
@@ -27,16 +27,19 @@ def process_stamps(request: PdfRequest):
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    # Process
+    # 2. Convert to Images
     try:
         pages = convert_from_bytes(pdf_bytes, dpi=300)
     except:
-        # Fallback: Sometimes poppler needs simpler calls or fails on bad PDFs
         raise HTTPException(status_code=500, detail="PDF conversion failed")
 
+    # 3. Process
     output_buffer = io.BytesIO()
     c = canvas.Canvas(output_buffer, pagesize=landscape(A6))
     a6_width, a6_height = landscape(A6)
+    
+    # Track the count
+    total_stamps_found = 0
 
     for page_image_pil in pages:
         img = cv2.cvtColor(np.array(page_image_pil), cv2.COLOR_RGB2BGR)
@@ -71,12 +74,19 @@ def process_stamps(request: PdfRequest):
             
             c.drawImage(pil_image, x_pos, y_pos, width=draw_w, height=draw_h)
             c.showPage()
+            
+            # Increment Counter
+            total_stamps_found += 1
 
     c.save()
     output_buffer.seek(0)
     
+    # 4. Return File + Header
     return StreamingResponse(
         output_buffer, 
         media_type="application/pdf",
-        headers={"Content-Disposition": "attachment; filename=stamps.pdf"}
+        headers={
+            "Content-Disposition": "attachment; filename=stamps.pdf",
+            "X-Page-Count": str(total_stamps_found)  # <--- HERE IS THE NEW DATA
+        }
     )
