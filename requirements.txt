@@ -6,3 +6,5 @@ reportlab
 opencv-python-headless
 numpy
 Pillow
+requests
+pydantic
