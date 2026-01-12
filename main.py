@@ -27,7 +27,7 @@ def process_stamps(request: PdfRequest):
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    # 2. Convert to Images
+    # 2. Convert
     try:
         pages = convert_from_bytes(pdf_bytes, dpi=300)
     except:
@@ -38,8 +38,7 @@ def process_stamps(request: PdfRequest):
     c = canvas.Canvas(output_buffer, pagesize=landscape(A6))
     a6_width, a6_height = landscape(A6)
     
-    # Track the count
-    total_stamps_found = 0
+    total_stamps = 0
 
     for page_image_pil in pages:
         img = cv2.cvtColor(np.array(page_image_pil), cv2.COLOR_RGB2BGR)
@@ -48,7 +47,6 @@ def process_stamps(request: PdfRequest):
         kernel = np.ones((30, 30), np.uint8) 
         dilated = cv2.dilate(thresh, kernel, iterations=3)
         contours, _ = cv2.findContours(dilated, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        
         bounding_boxes = [cv2.boundingRect(c) for c in contours]
         bounding_boxes.sort(key=lambda x: x[1])
 
@@ -75,18 +73,18 @@ def process_stamps(request: PdfRequest):
             c.drawImage(pil_image, x_pos, y_pos, width=draw_w, height=draw_h)
             c.showPage()
             
-            # Increment Counter
-            total_stamps_found += 1
+            total_stamps += 1
 
     c.save()
     output_buffer.seek(0)
     
-    # 4. Return File + Header
+    # --- MAGIC TRICK ---
+    # We put the count directly in the filename. 
+    # Zapier sees this name!
+    filename = f"Stamps_Count_{total_stamps}.pdf"
+    
     return StreamingResponse(
         output_buffer, 
         media_type="application/pdf",
-        headers={
-            "Content-Disposition": "attachment; filename=stamps.pdf",
-            "X-Page-Count": str(total_stamps_found)  # <--- HERE IS THE NEW DATA
-        }
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
     )
