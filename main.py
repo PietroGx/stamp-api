@@ -71,6 +71,11 @@ def merge_close_cuts(cuts, total_length, min_dist):
             last_accepted = cut
     return merged_cuts
 
+# --- HEALTH CHECK / WAKE UP ---
+@app.get("/")
+def health_check():
+    return {"status": "active", "message": "I am awake!"}
+
 # Changed to standard 'def' (not async) to prevent blocking the server while processing
 @app.post("/process-pdf/")
 def process_pdf(input_data: PDFUrlInput):
