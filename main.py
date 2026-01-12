@@ -78,13 +78,16 @@ def process_stamps(request: PdfRequest):
     c.save()
     output_buffer.seek(0)
     
-    # --- MAGIC TRICK ---
-    # We put the count directly in the filename. 
-    # Zapier sees this name!
+    # --- FILENAME HACK ---
+    # We name the file "Stamps_Count_X.pdf".
+    # Zapier captures this in the headers, even if it hides other data.
     filename = f"Stamps_Count_{total_stamps}.pdf"
     
     return StreamingResponse(
         output_buffer, 
         media_type="application/pdf",
-        headers={"Content-Disposition": f"attachment; filename={filename}"}
+        headers={
+            "Content-Disposition": f"attachment; filename={filename}",
+            "X-Page-Count": str(total_stamps)
+        }
     )
