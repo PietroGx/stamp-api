@@ -1,6 +1,5 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from fastapi.responses import StreamingResponse
 import requests
 import cv2
 import numpy as np
@@ -10,6 +9,7 @@ from reportlab.pdfgen import canvas
 from reportlab.lib.utils import ImageReader
 from PIL import Image
 import io
+import base64
 
 app = FastAPI()
 
@@ -33,7 +33,6 @@ def process_stamps(request: PdfRequest):
     except:
         raise HTTPException(status_code=500, detail="PDF conversion failed")
 
-    # 3. Process
     output_buffer = io.BytesIO()
     c = canvas.Canvas(output_buffer, pagesize=landscape(A6))
     a6_width, a6_height = landscape(A6)
@@ -44,16 +43,26 @@ def process_stamps(request: PdfRequest):
         img = cv2.cvtColor(np.array(page_image_pil), cv2.COLOR_RGB2BGR)
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         _, thresh = cv2.threshold(gray, 150, 255, cv2.THRESH_BINARY_INV)
-        kernel = np.ones((30, 30), np.uint8) 
+        
+        # --- CV FIX: HORIZONTAL KERNEL ---
+        # We use a kernel that is WIDE (30px) but SHORT (5px).
+        # This connects text on the same line (the stamp) 
+        # but REFUSES to connect to the address line below it.
+        kernel = np.ones((5, 30), np.uint8) 
         dilated = cv2.dilate(thresh, kernel, iterations=3)
+        
         contours, _ = cv2.findContours(dilated, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         bounding_boxes = [cv2.boundingRect(c) for c in contours]
         bounding_boxes.sort(key=lambda x: x[1])
 
         for (x, y, w, h) in bounding_boxes:
-            if w < 250 or h < 100: continue
+            # Filter: Ignore tiny noise AND ignore huge blocks (addresses)
+            # If height is > 400px, it's likely the whole page text, not a stamp.
+            if w < 200 or h < 80 or h > 400: 
+                continue
             
-            padding = 30
+            # Crop
+            padding = 20
             h_img, w_img, _ = img.shape
             x1 = max(0, x - padding); y1 = max(0, y - padding)
             x2 = min(w_img, x + w + padding); y2 = min(h_img, y + h + padding)
@@ -62,6 +71,7 @@ def process_stamps(request: PdfRequest):
             stamp_crop_rgb = cv2.cvtColor(stamp_crop, cv2.COLOR_BGR2RGB)
             pil_image = ImageReader(Image.fromarray(stamp_crop_rgb))
 
+            # Scale to 1/4 Page
             img_w, img_h = x2-x1, y2-y1
             target_w, target_h = a6_width * 0.5, a6_height * 0.5
             scale = min(1.0, target_w / img_w, target_h / img_h)
@@ -72,22 +82,19 @@ def process_stamps(request: PdfRequest):
             
             c.drawImage(pil_image, x_pos, y_pos, width=draw_w, height=draw_h)
             c.showPage()
-            
             total_stamps += 1
 
     c.save()
-    output_buffer.seek(0)
     
-    # --- FILENAME HACK ---
-    # We name the file "Stamps_Count_X.pdf".
-    # Zapier captures this in the headers, even if it hides other data.
-    filename = f"Stamps_Count_{total_stamps}.pdf"
+    # --- ZAPIER DATA FIX ---
+    # We return JSON with Base64. 
+    # This guarantees you get the "count" and "file" as separate fields.
+    pdf_data = output_buffer.getvalue()
+    pdf_base64 = base64.b64encode(pdf_data).decode('utf-8')
     
-    return StreamingResponse(
-        output_buffer, 
-        media_type="application/pdf",
-        headers={
-            "Content-Disposition": f"attachment; filename={filename}",
-            "X-Page-Count": str(total_stamps)
-        }
-    )
+    return {
+        "status": "success",
+        "stamp_count": total_stamps,
+        "file_base64": pdf_base64,
+        "filename": f"Stamps_Qty_{total_stamps}.pdf"
+    }
