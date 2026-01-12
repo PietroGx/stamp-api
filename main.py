@@ -10,6 +10,7 @@ from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A6, landscape
 from reportlab.lib.utils import ImageReader
 from PIL import Image
+from datetime import datetime
 
 app = FastAPI()
 
@@ -154,8 +155,11 @@ def process_pdf(input_data: PDFUrlInput):
     output_buffer.seek(0)
     
     # 3. RETURN WITH DYNAMIC FILENAME
+    # Generate date string (e.g., "2023-10-27")
+    date_str = datetime.now().strftime("%Y-%m-%d")
+    
     return StreamingResponse(
         output_buffer, 
         media_type="application/pdf", 
-        headers={"Content-Disposition": f"attachment; filename=printout_stamps_{total_stamps}.pdf"}
+        headers={"Content-Disposition": f"attachment; filename={date_str}_printout_stamps_{total_stamps}.pdf"}
     )
