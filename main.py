@@ -19,8 +19,9 @@ class PDFUrlInput(BaseModel):
     url: str
 
 # --- CONFIGURATION ---
-MIN_GAP_HEIGHT = 50
+MIN_GAP_HEIGHT = 20
 MAX_GAP_HEIGHT = 60
+MIN_GAP_WIDTH = 150
 GAP_THRESHOLD = 0.04
 MIN_STAMP_HEIGHT = 300
 
@@ -113,7 +114,7 @@ def process_pdf(input_data: PDFUrlInput):
         col_proj = np.sum(thresh, axis=0)
         
         raw_y_cuts = find_gap_centers(row_proj, GAP_THRESHOLD, min_gap_width=MIN_GAP_HEIGHT, max_gap_width=MAX_GAP_HEIGHT)
-        raw_x_cuts = find_gap_centers(col_proj, GAP_THRESHOLD, min_gap_width=20, max_gap_width=2000)
+        raw_x_cuts = find_gap_centers(col_proj, GAP_THRESHOLD, min_gap_width=MIN_GAP_WIDTH, max_gap_width=2000)
         
         final_y_cuts = merge_close_cuts(raw_y_cuts, h_img, MIN_STAMP_HEIGHT)
         final_x_cuts = merge_close_cuts(raw_x_cuts, w_img, 200)
